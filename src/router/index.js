@@ -10,6 +10,8 @@ import UserHomePage from "@/views/UserHomePage.vue";
 import UserManagementPage from "@/views/UserManagementPage.vue";
 import CheckupMangementPage from "@/views/CheckupMangementPage.vue";
 import ReportPage from "@/views/ReportPage.vue";
+import jwtDecode from "jwt-decode";
+import store from "@/store";
 
 
 const routes = [
@@ -79,14 +81,6 @@ const routes = [
       { path: 'report', name: 'report', component: ReportPage }
     ]
   },
-  {
-    path: '/about',
-    name: 'about',
-    // route level code-splitting
-    // this generates a separate chunk (about.[hash].js) for this route
-    // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "about" */ '../views/AboutView.vue')
-  },
   { path: '/:notFound(.*)', component: NotFoundPage },
 ]
 
@@ -97,25 +91,42 @@ const router = createRouter({
 })
 
 
-// router.beforeEach((to, from, next) => {
-//   const accessToken = store.state.accessToken;
-//   let isAuthenticated = store.getters.isAuthenticated
-//
-//   if (!isAuthenticated && to.name !== 'loginPage') {
-//     next({name: 'loginPage'})
-//   }
-//   else {
-//     const decoded = jwtDecode(accessToken)
-//     const role = decoded.roles[0].authority
-//     // if (role === 'ROLE_CUSTOMER' && to.name.includes('customer')) {
-//     //   next({name: 'homePage'})
-//     // }
-//     // else if (role !== 'ROLE_CUSTOMER' && to.name.startsWith('/customer')) {
-//     //   next({name: 'about'})
-//     // }
-//     // else return false
-//     next()
-//   }
-// });
+
+function isValidAccessToken(accessToken) {
+  console.log(accessToken)
+  if (!accessToken)
+    return false
+  console.log(accessToken)
+  const decodedToken = jwtDecode(accessToken)
+  const expiresIn = decodedToken.exp;
+  const currentTime = Math.floor(Date.now() / 1000);
+
+  return accessToken && (expiresIn > currentTime)
+}
+
+function getRole(accessToken) {
+  const decoded = jwtDecode(accessToken)
+  return decoded.roles[0].authority
+}
+
+router.beforeEach((to, from, next) => {
+  const accessToken = store.state.accessToken;
+  if (!to.meta.requiresAuth) {
+    next()
+  } else if (to.meta?.requiresAuth && !isValidAccessToken(accessToken)) {
+    next({ name: 'loginPage' });
+  }  else if (isValidAccessToken(accessToken)) {
+    const role = getRole(accessToken)
+
+    if (role === 'ROLE_CUSTOMER' && !to.path.includes('customer')) {
+      next({name: 'homePage'})
+    } else if (role !== 'ROLE_CUSTOMER' && to.path.includes('customer')) {
+      next({name: 'userHomePage'})
+    } else next()
+  } else {
+    return false
+  }
+});
+
 
 export default router
